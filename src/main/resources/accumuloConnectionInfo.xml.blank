@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<connectionInfo>
+  <dbName>placeholder</dbName>
+  <zookeepers>placeholder, placeholder</zookeepers>
+  <ip>placeholder</ip>
+  <user>placeholder</user>
+  <password>placeholder</password>
+</connectionInfo>
