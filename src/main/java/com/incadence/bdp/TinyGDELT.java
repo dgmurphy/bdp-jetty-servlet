@@ -124,7 +124,6 @@ public class TinyGDELT {
 		long startTime = System.currentTimeMillis();  //start timer
 
   		CachedRowSet rowset = persistor.search(query);
-	    //JSONArray returnJsonArr = new JSONArray();  // The return value
   		
   		HashMap<String, JSONObject> eventsMap = getEventsMap(rowset);
   		JSONArray returnJsonArr = buildEventsJsonArray(coalesceFramework, eventsMap);	 //adds the actor data
