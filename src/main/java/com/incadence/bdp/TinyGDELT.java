@@ -40,6 +40,7 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 import com.incadencecorp.coalesce.common.exceptions.CoalesceException;
+import com.incadencecorp.coalesce.common.exceptions.CoalescePersistorException;
 import com.incadencecorp.coalesce.framework.CoalesceFramework;
 import com.incadencecorp.coalesce.framework.persistance.ServerConn;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersistor;
@@ -48,10 +49,14 @@ import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersist
 public class TinyGDELT {
 	
 	private GdeltConstants GDC; 
+	private int hasOneActor;
+	private int hasTwoActors;
+	List<String> uniqueGlobalIDs;
 	
 	public TinyGDELT() throws JSONException {
 		
 		GDC = new GdeltConstants();
+
 	}
 
     /**
@@ -112,88 +117,17 @@ public class TinyGDELT {
     	
     	//Filter filter = CQL.toFilter("FractionDate > 2017.052095");
     	//Filter filter = CQL.toFilter("GlobalEventID = '618742302'");
-    	Filter filter = CQL.toFilter("AvgTone > 5 OR AvgTone < -10");
-    	//Filter filter = CQL.toFilter("AvgTone < -8.0");
+    	//Filter filter = CQL.toFilter("AvgTone > 5 OR AvgTone < -10");
+    	Filter filter = CQL.toFilter("AvgTone < -8.0");
     	Query query = new Query("OEEvent_GDELT_0.1.EventSection.EventRecordset", filter);
 
 		long startTime = System.currentTimeMillis();  //start timer
 
   		CachedRowSet rowset = persistor.search(query);
-  	
-  		List<String> uniqueGlobalIDs = new ArrayList<String>();
-	    JSONArray returnJsonArr = new JSONArray();  // The return value
-		String gid = "";
-		int row = 0;
-		int hasOneActor = 0; // metrics
-		int hasTwoActors = 0;
-		System.out.println("Rowset size: " + rowset.size());
-		while (rowset.next()) {
-			
-			JSONObject outEventJson = new JSONObject(GDC.nullEventMap);
-
-			// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
-			String objid = rowset.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
-			gid = rowset.getString("GlobalEventID");
-			if ((objid == null) || (gid == null)) 
-				continue;
-			
-			if (!uniqueGlobalIDs.contains(gid)) 
-				uniqueGlobalIDs.add(gid);
-			else 
-				continue;
-						
-			// Copy rowset attributes over to the JSON object
-			for (Map.Entry<String, String> entry : GDC.eventGdeltToFeatureMap.entrySet())  
-				outEventJson.put(entry.getKey(), rowset.getString(entry.getValue()));
-		
-			//expand the event location point into lon/lat
-			if(rowset.getString("ActionGeoLocation") != null) {
-				String agLocation = rowset.getString("ActionGeoLocation");
-				agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
-				String[] latlong = agLocation.split(" ");
-				outEventJson.put("ActionGeo_Lat", latlong[1]);
-				outEventJson.put("ActionGeo_Long", latlong[0]);
-	    	}
-
-	    	if (row < 10)
-	    		System.out.println("Row: " + row + " GID: " + gid);  //print a few IDs
-	    	
-	    	// Retrieve Actors
-			String ceXml = coalesceFramework.getEntityXml(objid);
-			//String ceXml = "";
-			List<String> actorKeys = new ArrayList<String>();
-			if (ceXml.contains("entity2name=\"OEActor\"")) {
-				
-				try {
-					actorKeys = getActorKeys(ceXml);
-					if(actorKeys.size() > 0)  {
-						String[] actorXmlArr = null;
-						actorXmlArr = coalesceFramework.getEntityXmls(actorKeys.toArray(new String[actorKeys.size()]));
-						for (int i = 0; i < actorXmlArr.length; ++i) {
-							outEventJson = addActor(outEventJson, actorXmlArr[i], i+1);    // Add related actor data back to this event
-						}
-					}
-					
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			} // has actor
-			
-			if (outEventJson.get("Actor1Code") != null)
-				++ hasOneActor;
-			if (outEventJson.get("Actor2Code") != null)
-				++ hasTwoActors;
-				
-			returnJsonArr.add(outEventJson);  // add a fully populated event json object to the return array
-			
-			++row;
-			
-	    	if (row%100 == 0)
-	    		System.out.println("Row: " + row);
-
-		} // rowset loop
-	    
+	    //JSONArray returnJsonArr = new JSONArray();  // The return value
+  		
+  		HashMap<String, JSONObject> eventsMap = getEventsMap(rowset);
+  		JSONArray returnJsonArr = buildEventsJsonArray(coalesceFramework, eventsMap);	 //adds the actor data
 	
 		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size() + 
 				" Has 1 actor: " + hasOneActor + " Has 2 actors: " + hasTwoActors);
@@ -207,6 +141,171 @@ public class TinyGDELT {
 		
     }
 
+	// return a Map of <objectId, JSON Event>
+    private HashMap<String, JSONObject> getEventsMap(CachedRowSet crs) 
+    		throws SQLException {
+    	
+    	//JSONArray returnJsonArr = new JSONArray();
+    	HashMap<String, JSONObject> eventsMap = new HashMap<String, JSONObject>();
+    	
+    	uniqueGlobalIDs = new ArrayList<String>();
+		String gid = "";
+		int row = 0;
+		System.out.println("Rowset size: " + crs.size());
+    	while (crs.next()) {
+    		
+    		JSONObject outEventJson = new JSONObject(GDC.nullEventMap);
+    		
+			// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
+    		String objectId = crs.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
+			gid = crs.getString("GlobalEventID");
+			if ((objectId == null) || (gid == null)) 
+				continue;
+			
+			if (!uniqueGlobalIDs.contains(gid)) 
+				uniqueGlobalIDs.add(gid);
+			else 
+				continue;
+    		
+			// Copy rowset attributes over to the JSON object
+			for (Map.Entry<String, String> entry : GDC.eventGdeltToFeatureMap.entrySet())  
+				outEventJson.put(entry.getKey(), crs.getString(entry.getValue()));
+
+
+			//expand the event location point into lon/lat
+			if(crs.getString("ActionGeoLocation") != null) {
+				String agLocation = crs.getString("ActionGeoLocation");
+				agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
+				String[] latlong = agLocation.split(" ");
+				outEventJson.put("ActionGeo_Lat", latlong[1]);
+				outEventJson.put("ActionGeo_Long", latlong[0]);
+	    	}
+			
+	    	if (row < 10)
+	    		System.out.println("Row: " + row + " GID: " + gid);  //print a few IDs
+
+	    	eventsMap.put(objectId, outEventJson);
+	    	
+	    	++row;
+	    	
+	    	if (row%100 == 0)
+	    		System.out.println("Row: " + row);
+    	}
+    	
+    	return eventsMap;
+    	
+    }
+    
+    
+    private JSONArray buildEventsJsonArray(CoalesceFramework cf,HashMap<String, JSONObject> eventsMap) 
+    		throws CoalescePersistorException {
+    	
+    	JSONArray  resultJsonArr = new JSONArray();
+    	JSONObject myEventJson = null;
+    	
+    	String[] objectIds = eventsMap.keySet().toArray(new String[eventsMap.size()]);
+    	
+    	//  EXPENSIVE CALL to getEntityXmls
+    	System.out.println("Fetching entity XMLs");
+    	String[] ceXmls = cf.getEntityXmls(objectIds);
+    	
+    	for (int i = 0; i < ceXmls.length; ++i) {
+
+    		String ceXml = ceXmls[i];
+
+    		Map<String, String> actorMap = getActorMap(ceXml);
+    		myEventJson = eventsMap.get(actorMap.get("eventId")); // get the event
+
+    		int  numActors = Integer.parseInt(actorMap.get("numActors"));
+    		if(numActors > 0) { 
+    			String[] actorXmlArr = null;
+    			String[] actorKeys = new String[numActors];
+    			actorKeys[0] = actorMap.get("actor1");
+    			++hasOneActor;
+    			if (numActors > 1) {
+    				actorKeys[1] = actorMap.get("actor2");
+    				++hasTwoActors;
+    			}
+
+    			//  EXPENSIVE CALL to getEntityXmls
+    			actorXmlArr = cf.getEntityXmls(actorKeys);
+
+    			for (int j = 0; j < actorXmlArr.length; ++j) {
+    				// Add related actor data back to this event
+    				myEventJson = addActor(myEventJson, actorXmlArr[j], j+1);    
+    			}
+    		} // add actor info
+
+    		if (myEventJson != null)
+    			resultJsonArr.add(myEventJson); // add the event to the response
+
+    		if (i > 0 && i % 100 == 0)
+    			System.out.println("Row: " + i);
+    		
+    	} // event xmls loop
+    	
+    	return resultJsonArr;
+    }
+    
+    private Map<String, String> getActorMap(String xmlString) {
+    	
+    	Map<String, String> actorMap = new HashMap<String, String>();
+    	int numActors = 0;
+    	String eventKey = "no event key";
+    	
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder builder;  
+		InputSource insrc = new InputSource( new StringReader( xmlString ));
+ 
+		try  
+		{  
+			builder = factory.newDocumentBuilder(); 
+			Document doc = builder.parse(insrc);
+			doc.getDocumentElement().normalize();
+			NodeList nodes = doc.getElementsByTagName("linkage");
+			boolean actor1Found = false;
+			boolean actor2Found = false;
+			for (int i = 0; i < nodes.getLength(); ++i) {
+				Node n = nodes.item(i);		
+				NamedNodeMap nnm = n.getAttributes();
+				Node e2n = nnm.getNamedItem("entity2name");
+				if ( (e2n.getNodeValue().equals("OEActor")) || 
+					 (e2n.getNodeValue().equals("OEAgent"))) {
+					if (!actor1Found) {
+						Node e2id = nnm.getNamedItem("entity2key");
+						actorMap.put("actor1", e2id.getNodeValue());
+						actor1Found = true;
+						++numActors;
+					}
+					else if (!actor2Found) { 
+						Node e2id = nnm.getNamedItem("entity2key");
+						actorMap.put("actor2", e2id.getNodeValue());
+						actor2Found = true;
+						++numActors;
+					}
+				} // linkage is an actor
+			} // loop over linkages
+			
+			nodes = doc.getElementsByTagName("entity");
+			if (nodes.getLength() > 0) {
+				Node n = nodes.item(0);
+				NamedNodeMap nnm = n.getAttributes();
+				Node eKey = nnm.getNamedItem("key");
+				eventKey = eKey.getNodeValue();
+			}
+			if (nodes.getLength() > 1)
+				System.out.println("WARN: Event XML has multiple entity tags");
+
+			
+			actorMap.put("eventId", eventKey);
+			actorMap.put("numActors", Integer.toString(numActors));
+			
+		} catch (Exception e) {  
+			e.printStackTrace();  
+		} 		
+		
+    	return actorMap;
+    }
     
     private JSONObject addActor(JSONObject json, String xmlString, int actorNum) {
     	
@@ -222,6 +321,7 @@ public class TinyGDELT {
 		{  
 			builder = factory.newDocumentBuilder(); 
 			Document doc = builder.parse(insrc);
+			doc.getDocumentElement().normalize();
 			NodeList nodes = doc.getElementsByTagName("field");
 			
 			for (int i = 0; i < nodes.getLength(); ++i) {
@@ -254,40 +354,12 @@ public class TinyGDELT {
 		} catch (Exception e) {  
 			e.printStackTrace();  
 		} 
- 
+	
     	return json;
     }
     
     
-    private List<String> getActorKeys(String xmlString) 
-    		throws ParserConfigurationException, SAXException, IOException {
-    	
-    	List<String> actorKeysList = new ArrayList<String>();
-    	
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder builder;  
-		InputSource insrc = new InputSource( new StringReader( xmlString ));
-		
-		try  
-		{  
-			builder = factory.newDocumentBuilder(); 
-			Document doc = builder.parse(insrc);
-			NodeList nodes = doc.getElementsByTagName("linkage");
-			for (int i = 0; i < nodes.getLength(); ++i) {
-				Node n = nodes.item(i);		
-				NamedNodeMap nnm = n.getAttributes();
-				Node e2n = nnm.getNamedItem("entity2name");
-				if (e2n.getNodeValue().equals("OEActor")) {
-					Node e2id = nnm.getNamedItem("entity2key");
-					actorKeysList.add(e2id.getNodeValue());
-				}
-			}
-		} catch (Exception e) {  
-			e.printStackTrace();  
-		} 
-		
-    	return actorKeysList;
-    }
+
     
     private Map<String,String> getAccumuloConnectioInfo () {
     	
@@ -345,23 +417,6 @@ public class TinyGDELT {
 		jarr = tgd.coalSearch();
 		System.out.println("coalSearch() returned JSONArray of length " + jarr.size());
 		
-		// Parse from XML
-//		String xmlstr;
-//		try {
-//			xmlstr = readFile("oeEvent.xml", StandardCharsets.UTF_8);
-//			tgd.getActorKeys(xmlstr);
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		
-		// test from file
-//    	GdeltConstants GDC = new GdeltConstants();
-//		String axml = readFile("oeEvent.xml", StandardCharsets.UTF_8);
-//		JSONObject outEventJson = new JSONObject(GDC.nullEventMap);
-//		tgd.addActor(outEventJson, axml, 1);
-
-
 		System.out.println("DONE");
     	
     }
