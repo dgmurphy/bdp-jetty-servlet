@@ -12,6 +12,11 @@ public final class GdeltConstants {
 	public Map<String, String> actor1FeatureToGdeltMap;  
 	public Map<String, String> actor2GdeltToFeatureMap;  
 	public Map<String, String> actor2FeatureToGdeltMap;  
+	
+	public Map<String, String> agent1GdeltToFeatureMap;  
+	public Map<String, String> agent2GdeltToFeatureMap;  
+
+	
 	public Map<String, String> eventGdeltToFeatureMap;  
 	
 	// Clean null event for JSON
@@ -103,6 +108,44 @@ public final class GdeltConstants {
 		actor2FeatureToGdeltMap.put("ActorGeoLocation", "Actor2Geo_Lat");  // Feature lat/long is one field
 		actor2FeatureToGdeltMap.put("ActorGeoLocation", "Actor2Geo_Long");
 		
+		agent1GdeltToFeatureMap = new HashMap<String, String>();
+		agent1GdeltToFeatureMap.put("Actor1Code","AgentCode");
+		agent1GdeltToFeatureMap.put("Actor1Name","AgentName");
+		agent1GdeltToFeatureMap.put("Actor1CountryCode","AgentCountryCode");
+		agent1GdeltToFeatureMap.put("Actor1KnownGroupCode","AgentKnownGroupCode");
+		agent1GdeltToFeatureMap.put("Actor1EthnicCode","AgentEthnicCode");
+		agent1GdeltToFeatureMap.put("Actor1Religion1Code","AgentReligion1Code");
+		agent1GdeltToFeatureMap.put("Actor1Religion2Code","AgentReligion2Code");
+		agent1GdeltToFeatureMap.put("Actor1Type1Code","AgentType1Code");
+		agent1GdeltToFeatureMap.put("Actor1Type2Code","AgentType2Code");
+		agent1GdeltToFeatureMap.put("Actor1Type3Code","AgentType3Code");
+		agent1GdeltToFeatureMap.put("Actor1Geo_Type","AgentGeoType");
+		agent1GdeltToFeatureMap.put("Actor1Geo_FullName","AgentGeoFullname");
+		agent1GdeltToFeatureMap.put("Actor1Geo_CountryCode","AgentGeoCountryCode");
+		agent1GdeltToFeatureMap.put("Actor1Geo_ADM1Code","AgentGeoADM1Code");
+		agent1GdeltToFeatureMap.put("Actor1Geo_FeatureID","AgentGeoFeatureID");
+		agent1GdeltToFeatureMap.put("Actor1Geo_Lat","AgentGeoLocation");  // Feature lat/long is one field
+		agent1GdeltToFeatureMap.put("Actor1Geo_Long","AgentGeoLocation");
+
+		agent2GdeltToFeatureMap = new HashMap<String, String>();
+		agent2GdeltToFeatureMap.put("Actor2Code","AgentCode");
+		agent2GdeltToFeatureMap.put("Actor2Name","AgentName");
+		agent2GdeltToFeatureMap.put("Actor2CountryCode","AgentCountryCode");
+		agent2GdeltToFeatureMap.put("Actor2KnownGroupCode","AgentKnownGroupCode");
+		agent2GdeltToFeatureMap.put("Actor2EthnicCode","AgentEthnicCode");
+		agent2GdeltToFeatureMap.put("Actor2Religion1Code","AgentReligion1Code");
+		agent2GdeltToFeatureMap.put("Actor2Religion2Code","AgentReligion2Code");
+		agent2GdeltToFeatureMap.put("Actor2Type1Code","AgentType1Code");
+		agent2GdeltToFeatureMap.put("Actor2Type2Code","AgentType2Code");
+		agent2GdeltToFeatureMap.put("Actor2Type3Code","AgentType3Code");
+		agent2GdeltToFeatureMap.put("Actor2Geo_Type","AgentGeoType");
+		agent2GdeltToFeatureMap.put("Actor2Geo_FullName","AgentGeoFullname");
+		agent2GdeltToFeatureMap.put("Actor2Geo_CountryCode","AgentGeoCountryCode");
+		agent2GdeltToFeatureMap.put("Actor2Geo_ADM1Code","AgentGeoADM1Code");
+		agent2GdeltToFeatureMap.put("Actor2Geo_FeatureID","AgentGeoFeatureID");
+		agent2GdeltToFeatureMap.put("Actor2Geo_Lat","AgentGeoLocation");  // Feature lat/long is one field
+		agent2GdeltToFeatureMap.put("Actor2Geo_Long","AgentGeoLocation");
+
 		
 		eventGdeltToFeatureMap = new HashMap<String, String>();
 		eventGdeltToFeatureMap.put("GLOBALEVENTID", "GlobalEventID");

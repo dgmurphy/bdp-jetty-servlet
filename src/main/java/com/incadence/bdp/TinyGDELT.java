@@ -24,6 +24,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.codehaus.jettison.json.JSONException;
+import org.geotools.data.DataStore;
 import org.geotools.data.Query;
 import org.geotools.filter.text.cql2.CQL;
 import org.geotools.filter.text.cql2.CQLException;
@@ -43,6 +44,7 @@ import com.incadencecorp.coalesce.common.exceptions.CoalesceException;
 import com.incadencecorp.coalesce.common.exceptions.CoalescePersistorException;
 import com.incadencecorp.coalesce.framework.CoalesceFramework;
 import com.incadencecorp.coalesce.framework.persistance.ServerConn;
+import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloDataConnector;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersistor;
 
 @Path("gdelt")
@@ -115,10 +117,21 @@ public class TinyGDELT {
     	CoalesceFramework coalesceFramework = new CoalesceFramework();
     	coalesceFramework.setAuthoritativePersistor(persistor);	
     	
+    	// Test & Debug
+    	AccumuloDataConnector acd = new AccumuloDataConnector(conn);
+    	DataStore geoDataStore = acd.getGeoDataStore();
+    	String[] typeNames= geoDataStore.getTypeNames();
+//    	System.out.println("Type Names in GeoTools DataStore:");
+//    	for (int m = 0; m < typeNames.length; ++m) {
+//    		System.out.println(typeNames[m]);
+//    	}
+    	
     	//Filter filter = CQL.toFilter("FractionDate > 2017.052095");
     	//Filter filter = CQL.toFilter("GlobalEventID = '618742302'");
     	//Filter filter = CQL.toFilter("AvgTone > 5 OR AvgTone < -10");
-    	Filter filter = CQL.toFilter("AvgTone < -8.0");
+    	//Filter filter = CQL.toFilter("AvgTone < -8.0");
+    	Filter filter = CQL.toFilter("GoldsteinScale > 8 OR GoldsteinScale < -8");
+
     	Query query = new Query("OEEvent_GDELT_0.1.EventSection.EventRecordset", filter);
 
 		long startTime = System.currentTimeMillis();  //start timer
@@ -126,7 +139,7 @@ public class TinyGDELT {
   		CachedRowSet rowset = persistor.search(query);
   		
   		HashMap<String, JSONObject> eventsMap = getEventsMap(rowset);
-  		JSONArray returnJsonArr = buildEventsJsonArray(coalesceFramework, eventsMap);	 //adds the actor data
+  		JSONArray returnJsonArr = buildEventsJsonArray(coalesceFramework, persistor, eventsMap);	 //adds the actor data
 	
 		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size() + 
 				" Has 1 actor: " + hasOneActor + " Has 2 actors: " + hasTwoActors);
@@ -144,7 +157,6 @@ public class TinyGDELT {
     private HashMap<String, JSONObject> getEventsMap(CachedRowSet crs) 
     		throws SQLException {
     	
-    	//JSONArray returnJsonArr = new JSONArray();
     	HashMap<String, JSONObject> eventsMap = new HashMap<String, JSONObject>();
     	
     	uniqueGlobalIDs = new ArrayList<String>();
@@ -196,8 +208,11 @@ public class TinyGDELT {
     }
     
     
-    private JSONArray buildEventsJsonArray(CoalesceFramework cf,HashMap<String, JSONObject> eventsMap) 
-    		throws CoalescePersistorException {
+    private JSONArray buildEventsJsonArray(CoalesceFramework cf, AccumuloPersistor persistor, 
+    		HashMap<String, JSONObject> eventsMap) 
+    		throws CoalescePersistorException, CQLException, SQLException {
+    	
+    	System.out.println("Unique Events: " + eventsMap.size());
     	
     	JSONArray  resultJsonArr = new JSONArray();
     	JSONObject myEventJson = null;
@@ -213,7 +228,7 @@ public class TinyGDELT {
     		String ceXml = ceXmls[i];
 
     		Map<String, String> actorMap = getActorMap(ceXml);
-    		myEventJson = eventsMap.get(actorMap.get("eventId")); // get the event
+    		myEventJson = eventsMap.get(actorMap.get("eventId")); // get the event key
 
     		int  numActors = Integer.parseInt(actorMap.get("numActors"));
     		if(numActors > 0) { 
@@ -227,23 +242,87 @@ public class TinyGDELT {
     			}
 
     			//  EXPENSIVE CALL to getEntityXmls
-    			actorXmlArr = cf.getEntityXmls(actorKeys);
-
-    			for (int j = 0; j < actorXmlArr.length; ++j) {
+    			//actorXmlArr = cf.getEntityXmls(actorKeys);
+    			//for (int j = 0; j < actorXmlArr.length; ++j) {
     				// Add related actor data back to this event
-    				myEventJson = addActor(myEventJson, actorXmlArr[j], j+1);    
-    			}
+    			//	myEventJson = addActor(myEventJson, actorXmlArr[j], j+1);    
+    			//}
+    			
+    			// More efficient? call to get actor entities
+    			myEventJson = addActor(persistor, myEventJson, actorKeys[0], 1);
+    			if (numActors > 1)
+    				myEventJson = addActor(persistor, myEventJson, actorKeys[1], 2);
+    			
     		} // add actor info
 
     		if (myEventJson != null)
     			resultJsonArr.add(myEventJson); // add the event to the response
 
-    		if (i > 0 && i % 100 == 0)
+    		if (i > 0 && i % 10 == 0)
     			System.out.println("Row: " + i);
     		
     	} // event xmls loop
     	
     	return resultJsonArr;
+    }
+    
+    private JSONObject addActor(AccumuloPersistor persistor, JSONObject myEventJson, 
+    		String actorKey, int actorNum) 
+    		throws CQLException, CoalescePersistorException, SQLException {
+    	   	
+    	Map<String, String> gdeltToFeatureMap;
+    		
+    	String filterStr = AccumuloPersistor.ENTITY_KEY_COLUMN_NAME + " = '" + actorKey + "'";
+    	Filter filter = CQL.toFilter(filterStr);
+    	Query query = new Query("OEActor_GDELT_0.1.ActorSection.ActorRecordset", filter);
+    	
+    	CachedRowSet rowset = persistor.search(query);
+    	
+    	if (rowset.next()) {   // s/b only 1 result
+    		
+        	gdeltToFeatureMap = GDC.actor1GdeltToFeatureMap;
+        	if (actorNum == 2)
+        		gdeltToFeatureMap = GDC.actor2GdeltToFeatureMap;
+
+    		// Copy rowset attributes over to the JSON object
+    		for (Map.Entry<String, String> entry : gdeltToFeatureMap.entrySet())  
+    			myEventJson.put(entry.getKey(), rowset.getString(entry.getValue()));
+    		
+    		//expand location
+    		if(rowset.getString("ActorGeoLocation") != null) {
+				String agLocation = rowset.getString("ActorGeoLocation");
+				agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
+				String[] latlong = agLocation.split(" ");
+				myEventJson.put("Actor"+actorNum+"Geo_Lat", latlong[1]);
+				myEventJson.put("Actor"+actorNum+"Geo_Long", latlong[0]);
+    		}
+    		
+    	} else {
+    		// No actor found?  Check for OEAgents too:    OEAgent_GDELT_0.1.AgentSection.AgentRecordset
+    		query = new Query("OEAgent_GDELT_0.1.AgentSection.AgentRecordset", filter);
+    		rowset = persistor.search(query);
+    		if (rowset.first()) {
+    			
+            	gdeltToFeatureMap = GDC.agent1GdeltToFeatureMap;
+            	if (actorNum == 2)
+            		gdeltToFeatureMap = GDC.agent2GdeltToFeatureMap;
+		
+        		for (Map.Entry<String, String> entry : gdeltToFeatureMap.entrySet())  
+        			myEventJson.put(entry.getKey(), rowset.getString(entry.getValue()));
+    			
+        		//expand location
+        		if(rowset.getString("AgentGeoLocation") != null) {
+    				String agLocation = rowset.getString("AgentGeoLocation");
+    				agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
+    				String[] latlong = agLocation.split(" ");
+    				myEventJson.put("Actor"+actorNum+"Geo_Lat", latlong[1]);
+    				myEventJson.put("Actor"+actorNum+"Geo_Long", latlong[0]);
+
+        		} // location
+    		}  // rowset  
+    	} // else OE Agents
+    	
+    	return myEventJson;
     }
     
     private Map<String, String> getActorMap(String xmlString) {
@@ -269,7 +348,8 @@ public class TinyGDELT {
 				NamedNodeMap nnm = n.getAttributes();
 				Node e2n = nnm.getNamedItem("entity2name");
 				if ( (e2n.getNodeValue().equals("OEActor")) || 
-					 (e2n.getNodeValue().equals("OEAgent"))) {
+						 (e2n.getNodeValue().equals("OEAgent"))) {
+				
 					if (!actor1Found) {
 						Node e2id = nnm.getNamedItem("entity2key");
 						actorMap.put("actor1", e2id.getNodeValue());
@@ -306,59 +386,6 @@ public class TinyGDELT {
     	return actorMap;
     }
     
-    private JSONObject addActor(JSONObject json, String xmlString, int actorNum) {
-    	
-    	Map<String,String> featureToGdeltMap = GDC.actor1FeatureToGdeltMap;
-    	if (actorNum > 1)
-    		featureToGdeltMap = GDC.actor2FeatureToGdeltMap;
-    	
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder builder;  
-		InputSource insrc = new InputSource( new StringReader( xmlString ));
-		
-		try  
-		{  
-			builder = factory.newDocumentBuilder(); 
-			Document doc = builder.parse(insrc);
-			doc.getDocumentElement().normalize();
-			NodeList nodes = doc.getElementsByTagName("field");
-			
-			for (int i = 0; i < nodes.getLength(); ++i) {
-				String featureName = null;
-				String featureValue = null;
-				Node n = nodes.item(i);		
-				NamedNodeMap nnm = n.getAttributes();
-				if(nnm.getNamedItem("value") == null)
-					continue;
-				
-				featureValue = nnm.getNamedItem("value").getNodeValue();
-				
-				if(nnm.getNamedItem("name") != null) {
-					featureName = nnm.getNamedItem("name").getNodeValue();
-					//unformat the actor location
-					if(featureName.equals("ActorGeoLocation")) {
-						String agLocation = featureValue;
-						agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
-						String[] latlong = agLocation.split(" ");
-						json.put("Actor"+actorNum+"Geo_Lat", latlong[1]);
-						json.put("Actor"+actorNum+"Geo_Long", latlong[0]);
-						
-					} else if (featureToGdeltMap.keySet().contains(featureName)) {
-						json.put(featureToGdeltMap.get(featureName), featureValue);
-					}
-				}  // node name not null
-				
-			} // node loop
-			
-		} catch (Exception e) {  
-			e.printStackTrace();  
-		} 
-	
-    	return json;
-    }
-    
-    
-
     
     private Map<String,String> getAccumuloConnectioInfo () {
     	
