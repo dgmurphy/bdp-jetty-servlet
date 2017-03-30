@@ -32,6 +32,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.opengis.feature.simple.SimpleFeatureType;
+import org.opengis.feature.type.AttributeType;
 import org.opengis.filter.Filter;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
@@ -76,6 +78,7 @@ public class TinyGDELT {
 
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
+			System.out.println("Error creating Accumulo persistor.");
 			e.printStackTrace();
 		}
 
@@ -119,13 +122,29 @@ public class TinyGDELT {
 			acd = new AccumuloDataConnector(conn);
 			DataStore geoDataStore = acd.getGeoDataStore();
 			String[] typeNames= geoDataStore.getTypeNames();
+			
 			if (typeNames.length > 0) {
-				html = "<ul>";
+				html = "<p><strong>Type Names:</strong></p>";
+				html += "<ul>";
 				for (int i = 0; i < typeNames.length; ++i) {
 					html += "<li>" + typeNames[i] + "</li>";
 				}
 				html += "</ul>";
 			}
+			
+			html += "<p><strong>Features by Type Name</strong></p>";
+			SimpleFeatureType schema; 
+			
+			for (int i = 0; i < typeNames.length; ++i) {
+				html += "<p>Type: " + typeNames[i] + "</p><ul>";
+				schema = geoDataStore.getSchema(typeNames[i]);
+				List<AttributeType> types = schema.getTypes();
+				for (AttributeType type : types) {
+					html += "<li>" + type.getName() + "</li>";
+				}
+				html += "</ul>";
+			}
+			
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -135,11 +154,7 @@ public class TinyGDELT {
     }
     
     
-    /**
-     * Method handling HTTP GET requests for GDELT data from BDP
-     *
-     * @return JSONArray of GDELT events using a BDP Query
-     */    
+ 
     @SuppressWarnings("unchecked")
 	@GET
     @Path("bdp")
@@ -284,6 +299,8 @@ public class TinyGDELT {
     			System.out.println("Row: " + i);
     		
     	} // event xmls loop
+    	
+    	coalesceFramework.close();
     	
     	return resultJsonArr;
     }
