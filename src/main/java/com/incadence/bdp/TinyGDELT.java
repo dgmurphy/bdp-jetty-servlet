@@ -52,6 +52,24 @@ import com.incadencecorp.coalesce.framework.persistance.ServerConn;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloDataConnector;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersistor;
 
+/*
+ * GDELT Services via Jetty.
+ * 
+ * e.g.:
+ * tiny-gdelt/webapi/gdelt/test
+ *     Return a couple of hard-coded events
+ *     
+ *  tiny-gdelt/webapi/gdelt/typenames
+ *     Show the typenames and features in the datastore
+ *     
+ *  tiny-gdelt/webapi/gdelt/artifact/618529378
+ *    Get an artifact with a given GlobalEventID (s/b only 1)
+ *    
+ *  tiny-gdelt/webapi/gdelt/bdp
+ *     Query Accumulo for events 
+ * 
+ */
+
 @Path("gdelt")
 public class TinyGDELT {
 	
