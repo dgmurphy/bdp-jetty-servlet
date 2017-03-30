@@ -11,12 +11,15 @@ import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.xml.parsers.DocumentBuilder;
@@ -153,10 +156,50 @@ public class TinyGDELT {
     	return html;
     }
     
-    
- 
-    @SuppressWarnings("unchecked")
 	@GET
+    @Path("artifact/{globalEventId}")
+    @Produces(MediaType.APPLICATION_JSON)   
+    public JSONArray getArtifact(@PathParam("globalEventId") String globalEventId) {
+		
+		JSONArray returnJsonArr = new JSONArray();
+		
+		String filterString = "GlobalEventID = " + globalEventId;
+		try {
+			Filter filter = CQL.toFilter(filterString);
+			Query query = new Query("GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset", filter);
+			CachedRowSet rowset = persistor.search(query);
+			System.out.println("Rowset size for ID " + globalEventId + ": " + rowset.size());
+			returnJsonArr = buildArtifacts(rowset);	 
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return returnJsonArr;
+	}
+    
+	@SuppressWarnings("unchecked")
+	private JSONArray buildArtifacts(CachedRowSet crs) 
+			throws SQLException {
+	
+		JSONArray returnJsonArr = new JSONArray();
+    	while (crs.next()) {
+    		
+    		JSONObject artifactJson = new JSONObject(GDC.nullArtifactMap);
+    		
+			// Copy rowset attributes over to the JSON object
+    		Set<String> keys = artifactJson.keySet();
+			for (String key : keys)  
+				artifactJson.put(key, crs.getString(key));
+   		
+    		returnJsonArr.add(artifactJson);
+    	}
+    	
+    	return returnJsonArr;
+	}
+ 
+    @GET
     @Path("bdp")
     @Produces(MediaType.APPLICATION_JSON)   
     public JSONArray coalSearch() 
@@ -166,7 +209,7 @@ public class TinyGDELT {
     	//Filter filter = CQL.toFilter("GlobalEventID = '618742302'");
     	//Filter filter = CQL.toFilter("AvgTone > 5 OR AvgTone < -10");
     	//Filter filter = CQL.toFilter("AvgTone < -8.0");
-    	Filter filter = CQL.toFilter("GoldsteinScale > 9 OR GoldsteinScale < -9");
+    	Filter filter = CQL.toFilter("GoldsteinScale > 9.5 OR GoldsteinScale < -9.5");
 
     	Query query = new Query("OEEvent_GDELT_0.1.EventSection.EventRecordset", filter);
 
@@ -454,12 +497,16 @@ public class TinyGDELT {
     	System.out.println(tgd.getTypeNames());
     	
     	// Two events hardcoded
-    	JSONArray jarr = tgd.test();
-    	System.out.println("testIt() returned JSONArray of length " + jarr.size());
+    	//JSONArray jarr = tgd.test();
+    	//System.out.println("testIt() returned JSONArray of length " + jarr.size());
     	
     	// Coalesce Search
-		jarr = tgd.coalSearch();
-		System.out.println("coalSearch() returned JSONArray of length " + jarr.size());
+		//jarr = tgd.coalSearch();
+		//System.out.println("coalSearch() returned JSONArray of length " + jarr.size());
+    	
+    	JSONArray gdeltRaw = tgd.getArtifact("618529378");
+    	System.out.println("For ID 618529378 found " + gdeltRaw.size() + " artifacts");
+    	System.out.println(gdeltRaw.toString());
 		
 		System.out.println("DONE");
     	

@@ -19,8 +19,10 @@ public final class GdeltConstants {
 	
 	public Map<String, String> eventGdeltToFeatureMap;  
 	
-	// Clean null event for JSON
+	// Clean null JSON objects
 	public Map<String,JSONObject> nullEventMap;  
+	public Map<String,JSONObject> nullArtifactMap;  
+	
 	
 	// Sample GDELT data json strings
 	public String sampleEvent_ID498859055;  
@@ -234,6 +236,17 @@ public final class GdeltConstants {
 		nullEventMap.put("ActionGeo_FeatureID", (JSONObject)null);
 		nullEventMap.put("DATEADDED", (JSONObject)null);
 		nullEventMap.put("SOURCEURL", (JSONObject)null);
+		
+		nullArtifactMap = new HashMap<String, JSONObject>();
+		nullArtifactMap.put("objectKey", (JSONObject)null);
+		nullArtifactMap.put("entityName", (JSONObject)null);
+		nullArtifactMap.put("entitySource", (JSONObject)null);
+		nullArtifactMap.put("entityTitle", (JSONObject)null);
+		nullArtifactMap.put("recordKey", (JSONObject)null);
+		nullArtifactMap.put("SourceFileName", (JSONObject)null);
+		nullArtifactMap.put("GlobalEventID", (JSONObject)null);
+		nullArtifactMap.put("RawText", (JSONObject)null);
+		nullArtifactMap.put("theWorld", (JSONObject)null);
 	
 		
 		sampleEvent_ID498859055 = "{\"GLOBALEVENTID\":\"498859055\","
