@@ -16,18 +16,21 @@ public final class GdeltConstants {
 	public Map<String, String> agent1GdeltToFeatureMap;  
 	public Map<String, String> agent2GdeltToFeatureMap;  
 
-	
 	public Map<String, String> eventGdeltToFeatureMap;  
+	
+	public Map<String, Integer> eventFeatureToRawColumnMap;
 	
 	// Clean null JSON objects
 	public Map<String,JSONObject> nullEventMap;  
 	public Map<String,JSONObject> nullArtifactMap;  
 	
-	
 	// Sample GDELT data json strings
 	public String sampleEvent_ID498859055;  
 	public String sampleEvent_ID498847267;  
 	
+	public String SplitToken = "\t";
+
+    
 	public GdeltConstants() {
 		
 		// Coalesce actor entities don't know if they are actor 1 or 2
@@ -248,6 +251,71 @@ public final class GdeltConstants {
 		nullArtifactMap.put("RawText", (JSONObject)null);
 		nullArtifactMap.put("theWorld", (JSONObject)null);
 	
+		eventFeatureToRawColumnMap = new HashMap<String, Integer>();
+		eventFeatureToRawColumnMap.put("GLOBALEVENTID", 0);
+		eventFeatureToRawColumnMap.put("SQLDATE", 1);
+		eventFeatureToRawColumnMap.put("MonthYear", 2);
+		eventFeatureToRawColumnMap.put("Year", 3);
+		eventFeatureToRawColumnMap.put("FractionDate", 4);
+		eventFeatureToRawColumnMap.put("Actor1Code", 5);
+		eventFeatureToRawColumnMap.put("Actor1Name", 6);
+		eventFeatureToRawColumnMap.put("Actor1CountryCode", 7);
+		eventFeatureToRawColumnMap.put("Actor1KnownGroupCode", 8);
+		eventFeatureToRawColumnMap.put("Actor1EthnicCode", 9);
+		eventFeatureToRawColumnMap.put("Actor1Religion1Code", 10);
+		eventFeatureToRawColumnMap.put("Actor1Religion2Code", 11);
+		eventFeatureToRawColumnMap.put("Actor1Type1Code", 12);
+		eventFeatureToRawColumnMap.put("Actor1Type2Code", 13);
+		eventFeatureToRawColumnMap.put("Actor1Type3Code", 14);
+		eventFeatureToRawColumnMap.put("Actor2Code", 15);
+		eventFeatureToRawColumnMap.put("Actor2Name", 16);
+		eventFeatureToRawColumnMap.put("Actor2CountryCode", 17);
+		eventFeatureToRawColumnMap.put("Actor2KnownGroupCode", 18);
+		eventFeatureToRawColumnMap.put("Actor2EthnicCode", 19);
+		eventFeatureToRawColumnMap.put("Actor2Religion1Code", 20);
+		eventFeatureToRawColumnMap.put("Actor2Religion2Code", 21);
+		eventFeatureToRawColumnMap.put("Actor2Type1Code", 22);
+		eventFeatureToRawColumnMap.put("Actor2Type2Code", 23);
+		eventFeatureToRawColumnMap.put("Actor2Type3Code", 24);
+		eventFeatureToRawColumnMap.put("IsRootEvent", 25);
+		eventFeatureToRawColumnMap.put("EventCode", 26);
+		eventFeatureToRawColumnMap.put("EventBaseCode", 27);
+		eventFeatureToRawColumnMap.put("EventRootCode", 28);
+		eventFeatureToRawColumnMap.put("QuadClass", 29);
+		eventFeatureToRawColumnMap.put("GoldsteinScale", 30);
+		eventFeatureToRawColumnMap.put("NumMentions", 31);
+		eventFeatureToRawColumnMap.put("NumSources", 32);
+		eventFeatureToRawColumnMap.put("NumArticles", 33);
+		eventFeatureToRawColumnMap.put("AvgTone", 34);
+		eventFeatureToRawColumnMap.put("Actor1Geo_Type", 35);
+		eventFeatureToRawColumnMap.put("Actor1Geo_FullName", 36);
+		eventFeatureToRawColumnMap.put("Actor1Geo_CountryCode", 37);
+		eventFeatureToRawColumnMap.put("Actor1Geo_ADM1Code", 38);
+		// eventRawColumnToFeatureMap.put("Actor1Geo_ADM2Code", 39); Events version 1 does not use ADM2
+		eventFeatureToRawColumnMap.put("Actor1Geo_Lat", 40);
+		eventFeatureToRawColumnMap.put("Actor1Geo_Long", 41);
+		eventFeatureToRawColumnMap.put("Actor1Geo_FeatureID", 42);
+		eventFeatureToRawColumnMap.put("Actor2Geo_Type", 43);
+		eventFeatureToRawColumnMap.put("Actor2Geo_FullName", 44);
+		eventFeatureToRawColumnMap.put("Actor2Geo_CountryCode", 45);
+		eventFeatureToRawColumnMap.put("Actor2Geo_ADM1Code", 46);
+		//eventRawColumnToFeatureMap.put("Actor2Geo_ADM2Code", 47);
+		eventFeatureToRawColumnMap.put("Actor2Geo_Lat", 48);
+		eventFeatureToRawColumnMap.put("Actor2Geo_Long", 49);
+		eventFeatureToRawColumnMap.put("Actor2Geo_FeatureID", 50);
+		eventFeatureToRawColumnMap.put("ActionGeo_Type", 51);
+		eventFeatureToRawColumnMap.put("ActionGeo_FullName", 52);
+		eventFeatureToRawColumnMap.put("ActionGeo_CountryCode", 53);
+		eventFeatureToRawColumnMap.put("ActionGeo_ADM1Code", 54);
+		//eventRawColumnToFeatureMap.put("ActionGeo_ADM1Code", 55);
+		eventFeatureToRawColumnMap.put("ActionGeo_Lat", 56);
+		eventFeatureToRawColumnMap.put("ActionGeo_Long", 57);
+		eventFeatureToRawColumnMap.put("ActionGeo_FeatureID", 58);
+		eventFeatureToRawColumnMap.put("DATEADDED", 59);
+		eventFeatureToRawColumnMap.put("SOURCEURL", 60);
+
+
+		
 		
 		sampleEvent_ID498859055 = "{\"GLOBALEVENTID\":\"498859055\","
     			+ "\"SQLDATE\":\"20160102\",\"MonthYear\":\"201601\",\"Year\":\"2016\","

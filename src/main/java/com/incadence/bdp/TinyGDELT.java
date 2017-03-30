@@ -2,7 +2,6 @@ package com.incadence.bdp;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -11,20 +10,23 @@ import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import javax.sql.rowset.CachedRowSet;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.UriInfo;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 
 import org.codehaus.jettison.json.JSONException;
 import org.geotools.data.DataStore;
@@ -43,7 +45,6 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
 
 import com.incadencecorp.coalesce.common.exceptions.CoalesceException;
 import com.incadencecorp.coalesce.common.exceptions.CoalescePersistorException;
@@ -66,8 +67,12 @@ import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersist
  *    Get an artifact with a given GlobalEventID (s/b only 1)
  *    
  *  tiny-gdelt/webapi/gdelt/bdp
- *     Query Accumulo for events 
+ *     Query Accumulo for events   
+ *     (todo: add query params for date, geofence, others)
  * 
+ *  tiny-gdelt/webapi/gdelt/artifacts
+ *     Query by GDELT Raw artifact (events and actors embedded in raw text)
+ * 			(todo: add query params for date range)
  */
 
 @Path("gdelt")
@@ -248,6 +253,80 @@ public class TinyGDELT {
 		
 		return returnJsonArr;
 		
+    }
+    
+    
+    @SuppressWarnings("unchecked")
+	@GET
+    @Path("artifacts")
+    @Produces(MediaType.APPLICATION_JSON)   
+    public JSONArray getArtifacts(@DefaultValue("1000") @QueryParam("limit") int limit) {
+    	
+    	JSONArray returnJsonArr = new JSONArray();
+    	uniqueGlobalIDs = new ArrayList<String>();
+    	
+    	String[] props = new String[]{"RawText"};  // This is getting ignored?
+     	int maxResults = limit;					   // This too
+    	String typeName = "GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset";
+    		
+    	long startTime = System.currentTimeMillis();  //start timer
+    	CachedRowSet rowset = null;
+		try {
+			Filter filter = CQL.toFilter("objectKey EXISTS");
+			Query query = new Query(typeName, filter, maxResults, props, "Get Raw Text");
+			rowset = persistor.search(query);
+			
+			int row = 0;
+			while (rowset.next() && (row < maxResults)) {    //maxResults not limiting rowset??
+				
+				// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
+	    		String objectId = rowset.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
+				String gid = rowset.getString("GlobalEventID");
+				if ((objectId == null) || (gid == null)) 
+					continue;
+				
+				if (!uniqueGlobalIDs.contains(gid)) 
+					uniqueGlobalIDs.add(gid);
+				else 
+					continue;
+
+				
+				String rawText = rowset.getString("RawText");
+				JSONObject eventJson = new JSONObject(GDC.nullEventMap);
+				eventJson = buildEventFromRaw(eventJson, rawText);
+				returnJsonArr.add(eventJson);
+				
+				++row;
+			}
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}     	
+		
+		long stopTime = System.currentTimeMillis();
+		System.out.println("Elapsed time was " + (stopTime - startTime)/1000.0 + " seconds.");
+
+		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size());
+
+		
+    	return returnJsonArr;
+    }
+    
+    
+    @SuppressWarnings("unchecked")
+	private JSONObject buildEventFromRaw(JSONObject eventJson, String rawText) {
+    	
+    	String[] fields = rawText.split("(\\\\t)"); //GDC.SplitToken);
+    	
+		// Copy rowset attributes over to the JSON object
+		for (Map.Entry<String, Integer> entry : GDC.eventFeatureToRawColumnMap.entrySet())  {
+			String val = fields[entry.getValue()];
+			if (val.length() > 0)
+				eventJson.put(entry.getKey(), val);
+		}
+     	
+    	return eventJson;
     }
 
 	// return a Map of <objectId, JSON Event>
@@ -522,10 +601,12 @@ public class TinyGDELT {
 		//jarr = tgd.coalSearch();
 		//System.out.println("coalSearch() returned JSONArray of length " + jarr.size());
     	
-    	JSONArray gdeltRaw = tgd.getArtifact("618529378");
-    	System.out.println("For ID 618529378 found " + gdeltRaw.size() + " artifacts");
-    	System.out.println(gdeltRaw.toString());
+//    	JSONArray gdeltRaw = tgd.getArtifact("618529378");
+//    	System.out.println("For ID 618529378 found " + gdeltRaw.size() + " artifacts");
+//    	System.out.println(gdeltRaw.toString());
 		
+    	tgd.getArtifacts(100);
+    	
 		System.out.println("DONE");
     	
     }
