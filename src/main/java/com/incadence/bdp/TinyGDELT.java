@@ -78,6 +78,12 @@ import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersist
 @Path("gdelt")
 public class TinyGDELT {
 	
+	public static String entityCQL = "GoldsteinScale > 9.5 OR GoldsteinScale < -9.5";
+	//public static String entityCQL = "FractionDate > 2017.052095";
+	//public static String entityCQL = "GlobalEventID = '618742302'";
+	//public static String entityCQL = "AvgTone > 5 OR AvgTone < -10";
+
+	
 	private AccumuloPersistor persistor;
 	private ServerConn conn;
 	
@@ -201,7 +207,7 @@ public class TinyGDELT {
 		
 		return returnJsonArr;
 	}
-    
+
 	@SuppressWarnings("unchecked")
 	private JSONArray buildArtifacts(CachedRowSet crs) 
 			throws SQLException {
@@ -221,18 +227,15 @@ public class TinyGDELT {
     	
     	return returnJsonArr;
 	}
- 
+ 	
+	
     @GET
     @Path("bdp")
     @Produces(MediaType.APPLICATION_JSON)   
     public JSONArray coalSearch() 
     		throws CQLException, SQLException, JSONException, CoalesceException, ParseException, IOException {
     		    	
-    	//Filter filter = CQL.toFilter("FractionDate > 2017.052095");
-    	//Filter filter = CQL.toFilter("GlobalEventID = '618742302'");
-    	//Filter filter = CQL.toFilter("AvgTone > 5 OR AvgTone < -10");
-    	//Filter filter = CQL.toFilter("AvgTone < -8.0");
-    	Filter filter = CQL.toFilter("GoldsteinScale > 9.5 OR GoldsteinScale < -9.5");
+    	Filter filter = CQL.toFilter(entityCQL);
 
     	Query query = new Query("OEEvent_GDELT_0.1.EventSection.EventRecordset", filter);
 
@@ -255,80 +258,6 @@ public class TinyGDELT {
 		
     }
     
-    
-    @SuppressWarnings("unchecked")
-	@GET
-    @Path("artifacts")
-    @Produces(MediaType.APPLICATION_JSON)   
-    public JSONArray getArtifacts(@DefaultValue("1000") @QueryParam("limit") int limit) {
-    	
-    	JSONArray returnJsonArr = new JSONArray();
-    	uniqueGlobalIDs = new ArrayList<String>();
-    	
-    	String[] props = new String[]{"RawText"};  // This is getting ignored?
-     	int maxResults = limit;					   // This too
-    	String typeName = "GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset";
-    		
-    	long startTime = System.currentTimeMillis();  //start timer
-    	CachedRowSet rowset = null;
-		try {
-			Filter filter = CQL.toFilter("objectKey EXISTS");
-			Query query = new Query(typeName, filter, maxResults, props, "Get Raw Text");
-			rowset = persistor.search(query);
-			
-			int row = 0;
-			while (rowset.next() && (row < maxResults)) {    //maxResults not limiting rowset??
-				
-				// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
-	    		String objectId = rowset.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
-				String gid = rowset.getString("GlobalEventID");
-				if ((objectId == null) || (gid == null)) 
-					continue;
-				
-				if (!uniqueGlobalIDs.contains(gid)) 
-					uniqueGlobalIDs.add(gid);
-				else 
-					continue;
-
-				
-				String rawText = rowset.getString("RawText");
-				JSONObject eventJson = new JSONObject(GDC.nullEventMap);
-				eventJson = buildEventFromRaw(eventJson, rawText);
-				returnJsonArr.add(eventJson);
-				
-				++row;
-			}
-			
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}     	
-		
-		long stopTime = System.currentTimeMillis();
-		System.out.println("Elapsed time was " + (stopTime - startTime)/1000.0 + " seconds.");
-
-		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size());
-
-		
-    	return returnJsonArr;
-    }
-    
-    
-    @SuppressWarnings("unchecked")
-	private JSONObject buildEventFromRaw(JSONObject eventJson, String rawText) {
-    	
-    	String[] fields = rawText.split("(\\\\t)"); //GDC.SplitToken);
-    	
-		// Copy rowset attributes over to the JSON object
-		for (Map.Entry<String, Integer> entry : GDC.eventFeatureToRawColumnMap.entrySet())  {
-			String val = fields[entry.getValue()];
-			if (val.length() > 0)
-				eventJson.put(entry.getKey(), val);
-		}
-     	
-    	return eventJson;
-    }
-
 	// return a Map of <objectId, JSON Event>
     private HashMap<String, JSONObject> getEventsMap(CachedRowSet crs) 
     		throws SQLException {
@@ -368,8 +297,12 @@ public class TinyGDELT {
 				outEventJson.put("ActionGeo_Long", latlong[0]);
 	    	}
 			
-	    	if (row < 10)
+	    	if (row < 4) {
+	    		if (row == 0)
+	    			System.out.println("Some sample GlobalEventIDs:");
+	    			
 	    		System.out.println("Row: " + row + " GID: " + gid);  //print a few IDs
+	    	}
 
 	    	eventsMap.put(objectId, outEventJson);
 	    	
@@ -435,7 +368,7 @@ public class TinyGDELT {
     		if (myEventJson != null)
     			resultJsonArr.add(myEventJson); // add the event to the response
 
-    		if (i > 0 && i % 10 == 0)
+    		if (i > 0 && i % 100 == 0)
     			System.out.println("Row: " + i);
     		
     	} // event xmls loop
@@ -444,43 +377,7 @@ public class TinyGDELT {
     	
     	return resultJsonArr;
     }
-    
-    private JSONObject addActor(AccumuloPersistor persistor, JSONObject myEventJson, 
-    		String actorKey, int actorNum) 
-    		throws CQLException, CoalescePersistorException, SQLException {
-    	   	
-    	Map<String, String> gdeltToFeatureMap;
-    		
-    	String filterStr = AccumuloPersistor.ENTITY_KEY_COLUMN_NAME + " = '" + actorKey + "'";
-    	Filter filter = CQL.toFilter(filterStr);
-    	Query query = new Query("OEAgent_GDELT_0.1.AgentSection.AgentRecordset", filter);
-    	
-    	CachedRowSet rowset = persistor.search(query); // Find one key
-    	
-    	if (rowset.first()) { // s/b only 1 result
-
-    		gdeltToFeatureMap = GDC.agent1GdeltToFeatureMap;
-    		if (actorNum == 2)
-    			gdeltToFeatureMap = GDC.agent2GdeltToFeatureMap;
-
-    		for (Map.Entry<String, String> entry : gdeltToFeatureMap.entrySet())  
-    			myEventJson.put(entry.getKey(), rowset.getString(entry.getValue()));
-
-    		//expand location
-    		if(rowset.getString("AgentGeoLocation") != null) {
-    			String agLocation = rowset.getString("AgentGeoLocation");
-    			agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
-    			String[] latlong = agLocation.split(" ");
-    			myEventJson.put("Actor"+actorNum+"Geo_Lat", latlong[1]);
-    			myEventJson.put("Actor"+actorNum+"Geo_Long", latlong[0]);
-
-    		} // location
-    	}  // rowset  
-    	 
-    	
-    	return myEventJson;
-    }
-    
+ 
     private Map<String, String> getActorMap(String xmlString) {
     	
     	Map<String, String> actorMap = new HashMap<String, String>();
@@ -541,6 +438,122 @@ public class TinyGDELT {
 		
     	return actorMap;
     }
+   
+    private JSONObject addActor(AccumuloPersistor persistor, JSONObject myEventJson, 
+    		String actorKey, int actorNum) 
+    		throws CQLException, CoalescePersistorException, SQLException {
+    	   	
+    	Map<String, String> gdeltToFeatureMap;
+    		
+    	String filterStr = AccumuloPersistor.ENTITY_KEY_COLUMN_NAME + " = '" + actorKey + "'";
+    	Filter filter = CQL.toFilter(filterStr);
+    	Query query = new Query("OEAgent_GDELT_0.1.AgentSection.AgentRecordset", filter);
+    	
+    	CachedRowSet rowset = persistor.search(query); // Find one key
+    	
+    	if (rowset.first()) { // s/b only 1 result
+
+    		gdeltToFeatureMap = GDC.agent1GdeltToFeatureMap;
+    		if (actorNum == 2)
+    			gdeltToFeatureMap = GDC.agent2GdeltToFeatureMap;
+
+    		for (Map.Entry<String, String> entry : gdeltToFeatureMap.entrySet())  
+    			myEventJson.put(entry.getKey(), rowset.getString(entry.getValue()));
+
+    		//expand location
+    		if(rowset.getString("AgentGeoLocation") != null) {
+    			String agLocation = rowset.getString("AgentGeoLocation");
+    			agLocation = agLocation.substring(agLocation.indexOf("(") + 1, agLocation.indexOf(")"));
+    			String[] latlong = agLocation.split(" ");
+    			myEventJson.put("Actor"+actorNum+"Geo_Lat", latlong[1]);
+    			myEventJson.put("Actor"+actorNum+"Geo_Long", latlong[0]);
+
+    		} // location
+    	}  // rowset  
+    	 
+    	
+    	return myEventJson;
+    }
+   
+    
+    @SuppressWarnings("unchecked")
+	@GET
+    @Path("artifacts")
+    @Produces(MediaType.APPLICATION_JSON)   
+    public JSONArray getArtifacts(@DefaultValue("1000") @QueryParam("limit") int limit) {
+    	
+    	JSONArray returnJsonArr = new JSONArray();
+    	uniqueGlobalIDs = new ArrayList<String>();
+    	
+    	String[] props = new String[]{"RawText"};  // This is getting ignored?
+     	int maxResults = limit;					   // This too
+    	String typeName = "GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset";
+    		
+    	long startTime = System.currentTimeMillis();  //start timer
+    	CachedRowSet rowset = null;
+		try {
+			Filter filter = CQL.toFilter("objectKey EXISTS");
+			Query query = new Query(typeName, filter, maxResults, props, "Get Raw Text");
+			rowset = persistor.search(query);
+			
+			int row = 0;
+			while (rowset.next() && (row < maxResults)) {    //maxResults not limiting rowset??
+				
+				// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
+	    		String objectId = rowset.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
+				String gid = rowset.getString("GlobalEventID");
+				if ((objectId == null) || (gid == null)) 
+					continue;
+				
+				if (!uniqueGlobalIDs.contains(gid)) 
+					uniqueGlobalIDs.add(gid);
+				else 
+					continue;
+
+				
+				String rawText = rowset.getString("RawText");
+				JSONObject eventJson = new JSONObject(GDC.nullEventMap);
+				eventJson = buildEventFromRaw(eventJson, rawText);
+				returnJsonArr.add(eventJson);
+				
+				++row;
+			}
+			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}     	
+		
+		long stopTime = System.currentTimeMillis();
+		System.out.println("Elapsed time was " + (stopTime - startTime)/1000.0 + " seconds.");
+
+		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size());
+
+		
+    	return returnJsonArr;
+    }
+    
+
+
+    
+    @SuppressWarnings("unchecked")
+	private JSONObject buildEventFromRaw(JSONObject eventJson, String rawText) {
+    	
+    	String[] fields = rawText.split("(\\\\t)"); //GDC.SplitToken);
+    	
+		// Copy rowset attributes over to the JSON object
+		for (Map.Entry<String, Integer> entry : GDC.eventFeatureToRawColumnMap.entrySet())  {
+			String val = fields[entry.getValue()];
+			if (val.length() > 0)
+				eventJson.put(entry.getKey(), val);
+		}
+     	
+    	return eventJson;
+    }
+
+    
+    
+    
     
     
     private Map<String,String> getAccumuloConnectioInfo () {
@@ -591,21 +604,33 @@ public class TinyGDELT {
     	
     	TinyGDELT tgd = new TinyGDELT();
     	
+    	System.out.println("\nGetting Type Names:");
     	System.out.println(tgd.getTypeNames());
+    	 
     	
     	// Two events hardcoded
-    	//JSONArray jarr = tgd.test();
-    	//System.out.println("testIt() returned JSONArray of length " + jarr.size());
+    	System.out.println("\nBuilding two hardcoded events:");
+    	JSONArray jarr = tgd.test();
+    	System.out.println("testIt() returned JSONArray of length " + jarr.size());
+    	 
     	
-    	// Coalesce Search
-		//jarr = tgd.coalSearch();
-		//System.out.println("coalSearch() returned JSONArray of length " + jarr.size());
+    	// Entity Search
+    	System.out.println("\nDoing Entity search with filter = " + tgd.entityCQL + ":");
+		jarr = tgd.coalSearch();
+		System.out.println("Entity search"  + " returned JSONArray of length " + jarr.size());
+    	 
     	
-//    	JSONArray gdeltRaw = tgd.getArtifact("618529378");
-//    	System.out.println("For ID 618529378 found " + gdeltRaw.size() + " artifacts");
-//    	System.out.println(gdeltRaw.toString());
+		String artifactID = "618529378";
+    	System.out.println("\nDoing artifact search for GlobalEventID = " + artifactID + ":");
+    	JSONArray gdeltRaw = tgd.getArtifact(artifactID);
+    	System.out.println("Found " + gdeltRaw.size() + " artifacts");
+    	System.out.println(gdeltRaw.toString() );
+    	 
 		
-    	tgd.getArtifacts(100);
+    	int numRawArtifacts = 10000;
+    	System.out.println("\nDoing raw artifact search, limit = " + numRawArtifacts + ":");
+    	tgd.getArtifacts(numRawArtifacts);
+    	System.out.println("\n");
     	
 		System.out.println("DONE");
     	
