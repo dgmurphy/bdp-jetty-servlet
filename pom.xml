@@ -86,8 +86,19 @@
                     <artifactId>jersey-core</artifactId>  
                     <groupId>com.sun.jersey</groupId>
                 </exclusion>
+                <!-- <exclusion>
+                    <artifactId>org.osgi.framework</artifactId>  
+                    <groupId>org.osgi</groupId>
+                </exclusion> -->
             </exclusions>
 		</dependency> 
+
+		<!-- https://mvnrepository.com/artifact/org.osgi/org.osgi.framework -->
+		<dependency>
+		    <groupId>org.osgi</groupId>
+		    <artifactId>org.osgi.framework</artifactId>
+		    <version>1.8.0</version>
+		</dependency>
 
 		<dependency>
 			<groupId>com.incadencecorp.coalesce</groupId>

@@ -49,9 +49,11 @@ import org.xml.sax.InputSource;
 import com.incadencecorp.coalesce.common.exceptions.CoalesceException;
 import com.incadencecorp.coalesce.common.exceptions.CoalescePersistorException;
 import com.incadencecorp.coalesce.framework.CoalesceFramework;
+import com.incadencecorp.coalesce.framework.persistance.ICoalescePersistor;
 import com.incadencecorp.coalesce.framework.persistance.ServerConn;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloDataConnector;
 import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersistor;
+import com.incadencecorp.coalesce.search.api.ICoalesceSearchPersistor;
 
 /*
  * GDELT Services via Jetty.
@@ -77,14 +79,11 @@ import com.incadencecorp.coalesce.framework.persistance.accumulo.AccumuloPersist
 
 @Path("gdelt")
 public class TinyGDELT {
-	
-	public static String entityCQL = "GoldsteinScale > 9.5 OR GoldsteinScale < -9.5";
-	//public static String entityCQL = "FractionDate > 2017.052095";
-	//public static String entityCQL = "GlobalEventID = '618742302'";
-	//public static String entityCQL = "AvgTone > 5 OR AvgTone < -10";
 
-	
-	private AccumuloPersistor persistor;
+	public static String entityCQL; 
+
+	//private AccumuloPersistor persistor;
+	private ICoalesceSearchPersistor persistor;
 	private ServerConn conn;
 	
 	private GdeltConstants GDC; 
@@ -195,8 +194,8 @@ public class TinyGDELT {
 		String filterString = "GlobalEventID = " + globalEventId;
 		try {
 			Filter filter = CQL.toFilter(filterString);
-			Query query = new Query("GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset", filter);
-			CachedRowSet rowset = persistor.search(query);
+			Query query = new Query("GDELTArtifactRecordset", filter);
+			CachedRowSet rowset = persistor.search(query).getResults();
 			System.out.println("Rowset size for ID " + globalEventId + ": " + rowset.size());
 			returnJsonArr = buildArtifacts(rowset);	 
 			
@@ -235,16 +234,26 @@ public class TinyGDELT {
     public JSONArray coalSearch() 
     		throws CQLException, SQLException, JSONException, CoalesceException, ParseException, IOException {
     		    	
+    	
+    	//entityCQL = "GoldsteinScale > 9.5 OR GoldsteinScale < -9.5";
+    	//entityCQL = "FractionDate > 2017.052095";
+    	//entityCQL = "GlobalEventID = '618742302'";
+    	entityCQL = "AvgTone > 5 OR AvgTone < -10";    	
+    	//entityCQL = "EventRecordset.FractionDate > 2015";
+    	
     	Filter filter = CQL.toFilter(entityCQL);
-
-    	Query query = new Query("OEEvent_GDELT_0.1.EventSection.EventRecordset", filter);
+    	Query query = new Query("EventRecordset", filter);
 
 		long startTime = System.currentTimeMillis();  //start timer
 
-  		CachedRowSet rowset = persistor.search(query);
+  		CachedRowSet rowset = persistor.search(query).getResults();
   		
-  		HashMap<String, JSONObject> eventsMap = getEventsMap(rowset);
-  		JSONArray returnJsonArr = buildEventsJsonArray(eventsMap);	 //adds the actor data
+  		JSONArray returnJsonArr = new JSONArray();
+  		uniqueGlobalIDs = new ArrayList<String>();
+  		if (rowset.size() > 0 ) {
+  			HashMap<String, JSONObject> eventsMap = getEventsMap(rowset);
+  			returnJsonArr = buildEventsJsonArray(eventsMap);	 //adds the actor data
+  		}
 	
 		System.out.println("Raw Rows: " + rowset.size() + " Unique IDs: " +  uniqueGlobalIDs.size() + 
 				" Has 1 actor: " + hasOneActor + " Has 2 actors: " + hasTwoActors);
@@ -264,7 +273,7 @@ public class TinyGDELT {
     	
     	HashMap<String, JSONObject> eventsMap = new HashMap<String, JSONObject>();
     	
-    	uniqueGlobalIDs = new ArrayList<String>();
+    	
 		String gid = "";
 		int row = 0;
 		System.out.println("Rowset size: " + crs.size());
@@ -330,7 +339,7 @@ public class TinyGDELT {
     	//  EXPENSIVE CALL to getEntityXmls
     	System.out.println("Fetching entity XMLs");
     	CoalesceFramework coalesceFramework = new CoalesceFramework();
-    	coalesceFramework.setAuthoritativePersistor(persistor);	
+    	coalesceFramework.setAuthoritativePersistor((ICoalescePersistor) persistor);	
     	String[] ceXmls = coalesceFramework.getEntityXmls(objectIds);
     	
     	for (int i = 0; i < ceXmls.length; ++i) {
@@ -439,7 +448,7 @@ public class TinyGDELT {
     	return actorMap;
     }
    
-    private JSONObject addActor(AccumuloPersistor persistor, JSONObject myEventJson, 
+    private JSONObject addActor(ICoalesceSearchPersistor persistor2, JSONObject myEventJson, 
     		String actorKey, int actorNum) 
     		throws CQLException, CoalescePersistorException, SQLException {
     	   	
@@ -447,9 +456,9 @@ public class TinyGDELT {
     		
     	String filterStr = AccumuloPersistor.ENTITY_KEY_COLUMN_NAME + " = '" + actorKey + "'";
     	Filter filter = CQL.toFilter(filterStr);
-    	Query query = new Query("OEAgent_GDELT_0.1.AgentSection.AgentRecordset", filter);
+    	Query query = new Query("AgentRecordset", filter);
     	
-    	CachedRowSet rowset = persistor.search(query); // Find one key
+    	CachedRowSet rowset = persistor2.search(query).getResults(); // Find one key
     	
     	if (rowset.first()) { // s/b only 1 result
 
@@ -486,18 +495,21 @@ public class TinyGDELT {
     	uniqueGlobalIDs = new ArrayList<String>();
     	
     	String[] props = new String[]{"RawText"};  // This is getting ignored?
-     	int maxResults = limit;					   // This too
-    	String typeName = "GDELTArtifact_GDELT_0.1.GDELTArtifactSection.GDELTArtifactRecordset";
+    	String typeName = "GDELTArtifactRecordset";
     		
     	long startTime = System.currentTimeMillis();  //start timer
     	CachedRowSet rowset = null;
 		try {
 			Filter filter = CQL.toFilter("objectKey EXISTS");
-			Query query = new Query(typeName, filter, maxResults, props, "Get Raw Text");
-			rowset = persistor.search(query);
+			//Query query = new Query(typeName, filter, limit, props, "Get Raw Text");
+			Query query = new Query(typeName);
+			//query.setPropertyNames(props);
+			query.setMaxFeatures(limit);
+			query.setFilter(filter); 
+			rowset = persistor.search(query).getResults();
 			
 			int row = 0;
-			while (rowset.next() && (row < maxResults)) {    //maxResults not limiting rowset??
+			while (rowset.next() && (row < limit)) {    //maxResults not limiting rowset??
 				
 				// Skip null entityKeys, null GlobalEventIDs, and duplicate entities
 	    		String objectId = rowset.getString(AccumuloPersistor.ENTITY_KEY_COLUMN_NAME);
@@ -615,19 +627,19 @@ public class TinyGDELT {
     	 
     	
     	// Entity Search
-    	System.out.println("\nDoing Entity search with filter = " + tgd.entityCQL + ":");
+    	System.out.println("\nDoing Entity search:");
 		jarr = tgd.coalSearch();
 		System.out.println("Entity search"  + " returned JSONArray of length " + jarr.size());
     	 
     	
-		String artifactID = "618529378";
+		String artifactID = "618527973";
     	System.out.println("\nDoing artifact search for GlobalEventID = " + artifactID + ":");
     	JSONArray gdeltRaw = tgd.getArtifact(artifactID);
     	System.out.println("Found " + gdeltRaw.size() + " artifacts");
     	System.out.println(gdeltRaw.toString() );
     	 
 		
-    	int numRawArtifacts = 10000;
+    	int numRawArtifacts = 100;
     	System.out.println("\nDoing raw artifact search, limit = " + numRawArtifacts + ":");
     	tgd.getArtifacts(numRawArtifacts);
     	System.out.println("\n");
