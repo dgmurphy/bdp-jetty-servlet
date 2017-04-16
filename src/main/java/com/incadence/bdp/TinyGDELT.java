@@ -227,22 +227,38 @@ public class TinyGDELT {
     	return returnJsonArr;
 	}
  	
-	
+	//    public JSONArray getArtifacts(@DefaultValue("1000") @QueryParam("limit") int limit) {
+
     @GET
     @Path("bdp")
     @Produces(MediaType.APPLICATION_JSON)   
-    public JSONArray coalSearch() 
+    public JSONArray coalSearch(@DefaultValue("1000") @QueryParam("limit") int limit,
+    							@DefaultValue("1") @QueryParam("day") int day,
+    							@DefaultValue("1") @QueryParam("month") int month,
+    							@DefaultValue("2017") @QueryParam("year") int year,
+    							@DefaultValue("1") @QueryParam("dayspan") int dayspan) 
     		throws CQLException, SQLException, JSONException, CoalesceException, ParseException, IOException {
     		    	
     	
     	//entityCQL = "GoldsteinScale > 9.5 OR GoldsteinScale < -9.5";
     	//entityCQL = "FractionDate > 2017.052095";
     	//entityCQL = "GlobalEventID = '618742302'";
-    	entityCQL = "AvgTone > 5 OR AvgTone < -10";    	
+    	//entityCQL = "AvgTone > 5 OR AvgTone < -10";    	
     	//entityCQL = "EventRecordset.FractionDate > 2015";
+    	double yearFraction = ((month - 1) * 30.42 + (day-1)) / 365.0;
+    	double fractionStartDate = year + yearFraction;
+    	double dayFraction = 0.00274 * dayspan;
+    	double fractionEndDate = fractionStartDate + dayFraction;   
+    	
+    	String beginDate = String.format("%.5f", fractionStartDate); 
+    	String endDate = String.format("%.5f", fractionEndDate); 
+    	
+    	entityCQL = "FractionDate > " + beginDate + " AND FractionDate < " + endDate;
     	
     	Filter filter = CQL.toFilter(entityCQL);
-    	Query query = new Query("EventRecordset", filter);
+    	Query query = new Query("EventRecordset");
+		query.setMaxFeatures(limit);
+		query.setFilter(filter); 
 
 		long startTime = System.currentTimeMillis();  //start timer
 
@@ -628,7 +644,7 @@ public class TinyGDELT {
     	
     	// Entity Search
     	System.out.println("\nDoing Entity search:");
-		jarr = tgd.coalSearch();
+		jarr = tgd.coalSearch(250, 1,1, 2017, 30);  // limit, day, month, year, dayspan
 		System.out.println("Entity search"  + " returned JSONArray of length " + jarr.size());
     	 
     	
